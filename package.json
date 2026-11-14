@@ -1,0 +1,27 @@
+{
+  "name": "stremio-animes-digital",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Addon não oficial do Stremio para o site Animes Digital (animesdigital.org)",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "smoke": "node test/smoke.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "stremio",
+    "stremio-addon",
+    "animes",
+    "animesdigital"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "express": "^4.21.2",
+    "stremio-addon-sdk": "^1.6.10"
+  }
+}
