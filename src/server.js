@@ -9,10 +9,26 @@ const { getRouter } = require('stremio-addon-sdk')
 
 const config = require('./config')
 const addonInterface = require('./addon')
+const scraper = require('./scraper')
 
 const app = express()
 app.disable('x-powered-by')
 app.set('trust proxy', true)
+
+// Log de requisições: no Vercel aparece em Deployments → Functions → Logs.
+// Serve para conferir exatamente quais caminhos o Stremio/Nuvio estão pedindo.
+app.use((req, res, next) => {
+  const startedAt = Date.now()
+  res.on('finish', () => {
+    if (req.path === '/logo.svg' || req.path === '/health') return
+    const ua = String(req.get('user-agent') || '').slice(0, 70)
+    console.log(
+      `[animesdigital] ${req.method} ${req.originalUrl} -> ${res.statusCode} ` +
+        `(${Date.now() - startedAt}ms) ua="${ua}"`
+    )
+  })
+  next()
+})
 
 // ---------------------------------------------------------------------------
 // Proxy opcional (útil quando o addon roda em um servidor remoto)
@@ -120,6 +136,32 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', addon: addonInterface.manifest.name, version: addonInterface.manifest.version })
 })
 
+// Diagnóstico rápido: resolve as fontes de um episódio e mostra o resultado.
+// Ex.: /debug/stream/139556
+app.get('/debug/stream/:videoId', async (req, res) => {
+  const startedAt = Date.now()
+  const videoId = String(req.params.videoId || '').trim()
+
+  try {
+    const streams = await scraper.getStreams(videoId)
+    res.setHeader('cache-control', 'no-store')
+    res.json({
+      ok: true,
+      videoId,
+      elapsedMs: Date.now() - startedAt,
+      count: streams.length,
+      streams
+    })
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      videoId,
+      elapsedMs: Date.now() - startedAt,
+      error: error.message
+    })
+  }
+})
+
 // ---------------------------------------------------------------------------
 // Landing page com botão de instalação
 // ---------------------------------------------------------------------------
@@ -178,6 +220,29 @@ app.get('/', (req, res) => {
       background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .09);
       padding: 3px 7px; border-radius: 6px; font-size: .86em; word-break: break-all;
     }
+    .copybox {
+      margin: 24px 0 6px; padding: 18px; border-radius: 14px;
+      border: 1px solid rgba(120, 160, 255, .18); background: rgba(255, 255, 255, .03);
+    }
+    .copybox label {
+      display: block; margin-bottom: 10px; font-size: .78rem; letter-spacing: .08em;
+      text-transform: uppercase; color: #9fb4d8;
+    }
+    .copyrow { display: flex; flex-wrap: wrap; gap: 10px; }
+    .copyrow input {
+      flex: 1 1 320px; min-width: 0; padding: 12px 14px; border-radius: 10px; font: inherit;
+      font-size: .9rem; color: #eef2f8; background: rgba(0, 0, 0, .35);
+      border: 1px solid rgba(255, 255, 255, .14);
+    }
+    .copyrow input:focus { outline: 2px solid #4c8dff; outline-offset: 1px; }
+    .btn-copy {
+      padding: 12px 18px; border: 0; border-radius: 10px; cursor: pointer; font: inherit;
+      font-weight: 700; color: #0b0f19; background: #eef2f8;
+    }
+    .btn-copy:hover { background: #fff; }
+    .status { min-height: 1.3em; margin: 10px 0 0; font-size: .82rem; color: #8fe3b0; }
+    .steps { margin: 18px 0 0; padding-left: 22px; color: #c5d2e8; line-height: 1.8; }
+    .steps strong { color: #eef2f8; }
     ul { color: #c5d2e8; line-height: 1.8; padding-left: 20px; }
     .note { margin-top: 24px; font-size: .84rem; color: #8ea3c4; border-top: 1px solid rgba(255,255,255,.08); padding-top: 18px; }
     .note a { color: #9db8ff; }
@@ -201,9 +266,21 @@ app.get('/', (req, res) => {
         <a class="btn btn-ghost" href="/manifest.json" target="_blank" rel="noreferrer">Ver manifest</a>
       </div>
 
-      <p>Se o botão não abrir o app, copie a URL do manifest e cole em
-        <strong>Addons → Instalar via URL</strong>:</p>
-      <p><code>${escapeHtml(manifestUrl)}</code></p>
+      <div class="copybox">
+        <label for="manifest-url">URL do addon — copie e cole no Stremio</label>
+        <div class="copyrow">
+          <input id="manifest-url" type="text" readonly spellcheck="false"
+                 value="${escapeHtml(manifestUrl)}" />
+          <button id="copy-btn" class="btn-copy" type="button">Copiar URL</button>
+        </div>
+        <p class="status" id="copy-status" role="status" aria-live="polite"></p>
+      </div>
+
+      <ol class="steps">
+        <li>Abra o <strong>Stremio</strong> e entre em <strong>Addons</strong>.</li>
+        <li>Clique em <strong>Instalar via URL</strong> (Install from URL).</li>
+        <li>Cole a URL acima e confirme.</li>
+      </ol>
 
       <ul>
         <li>Catálogo com os últimos animes adicionados</li>
@@ -217,6 +294,59 @@ app.get('/', (req, res) => {
       </div>
     </div>
   </main>
+
+  <script>
+    (function () {
+      var input = document.getElementById('manifest-url')
+      var button = document.getElementById('copy-btn')
+      var status = document.getElementById('copy-status')
+
+      function fallbackCopy() {
+        try {
+          input.focus()
+          input.select()
+          input.setSelectionRange(0, input.value.length)
+          return document.execCommand('copy')
+        } catch (error) {
+          return false
+        }
+      }
+
+      async function copy() {
+        var text = input.value
+        var copied = false
+
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text)
+            copied = true
+          }
+        } catch (error) {
+          copied = false
+        }
+
+        if (!copied) copied = fallbackCopy()
+
+        if (copied) {
+          status.textContent = 'URL copiada! Cole no Stremio em Addons → Instalar via URL.'
+          button.textContent = 'Copiado!'
+          setTimeout(function () { button.textContent = 'Copiar URL' }, 2500)
+        } else {
+          status.textContent = 'Não foi possível copiar automaticamente. Selecione o texto e use Ctrl+C.'
+        }
+      }
+
+      button.addEventListener('click', copy)
+
+      input.addEventListener('focus', function () {
+        input.select()
+      })
+
+      input.addEventListener('click', function () {
+        input.select()
+      })
+    })()
+  </script>
 </body>
 </html>`)
 })

@@ -2,6 +2,7 @@
 
 Addon **não oficial** para o [Stremio](https://www.stremio.com/) que usa o
 [animesdigital.org](https://animesdigital.org) como fonte de catálogo e players.
+Também aceita requisições do **Nuvio**, que usa o tipo `tv` para séries.
 
 Desenvolvido com o [Stremio Addon SDK](https://github.com/Stremio/stremio-addon-sdk)
 (`stremio-addon-sdk`) + Express + Cheerio.
@@ -47,6 +48,11 @@ npm start
 > `npm.cmd install`.
 
 O addon sobe em `http://127.0.0.1:7000`.
+
+> Se o botão **Instalar no Stremio** não abrir o app (alguns navegadores
+> bloqueiam o protocolo `stremio://`), use o campo **“URL do addon”** na
+> página inicial e clique em **Copiar URL**. Depois, no Stremio, vá em
+> **Addons → Instalar via URL** e cole.
 
 Abra **http://127.0.0.1:7000** no navegador e clique em **“Instalar no Stremio”**.
 Se preferir, copie a URL e instale manualmente em
@@ -305,6 +311,28 @@ public/logo.svg
   nova porta.
 - **Cloudflare / bloqueio de datacenter** — alguns provedores podem ser
   bloqueados pelo site. Teste o deploy antes de divulgar.
+
+### Nuvio: addon instala, mas não mostra fontes
+
+1. **Abra o anime pelo catálogo do addon** (“Últimos Animes” ou a busca do
+   addon). O addon só responde aos IDs `ad:…`; títulos abertos pelos catálogos
+   padrão do Nuvio (TMDB/IMDb) usam outro ID e não encontram fontes.
+2. **Confira o servidor pelo próprio celular**, na mesma rede do Nuvio:
+   `https://SEU-DOMINIO/debug/stream/139556` (troque o número por um episódio
+   seu). Se aparecer `"count": 3`, o addon está entregando as fontes e o
+   problema está no app.
+3. **Compare com o Stremio** usando a mesma URL. Se funcionar no Stremio, é
+   problema do Nuvio — versões **beta 0.6.x** têm um bug conhecido em que
+   nenhum addon retorna streams (`NuvioMedia/NuvioMobile#2442`). Teste a
+   versão estável.
+4. **Veja o que o app está pedindo**: no painel da Vercel, em
+   *Deployments → Functions → Logs*, cada requisição aparece como
+   `GET /stream/series/ad:ep:139556.json -> 200`. Se não aparecer nenhuma
+   requisição de `/stream/...`, o app nem chegou a consultar o addon.
+
+O addon aceita IDs em vários formatos (`ad:ep:123`, `ad:ep:123:1:1`,
+`ad:anime:slug:1:1`) e os tipos `series` e `tv`, justamente para cobrir as
+variações entre clientes.
 
 ---
 

@@ -6,6 +6,7 @@
  */
 
 const scraper = require('../src/scraper')
+const app = require('../src/server')
 
 async function main() {
   console.log('1) Catálogo "Últimos Animes"...')
@@ -37,6 +38,29 @@ async function main() {
 
   const playable = streams.filter((s) => s.url)
   if (!playable.length) throw new Error('Nenhum stream reproduzível encontrado')
+
+  const server = app.listen(0)
+  try {
+    const baseUrl = `http://127.0.0.1:${server.address().port}`
+    const metaResponse = await fetch(
+      `${baseUrl}/meta/tv/${encodeURIComponent(target.id)}.json`
+    )
+    const metaResult = await metaResponse.json()
+    if (!metaResponse.ok || !metaResult.meta) {
+      throw new Error('A rota de meta do Nuvio não retornou o anime')
+    }
+
+    const streamResponse = await fetch(
+      `${baseUrl}/stream/tv/${encodeURIComponent(episode.id)}.json`
+    )
+    const streamResult = await streamResponse.json()
+    if (!streamResponse.ok || !streamResult.streams.length) {
+      throw new Error('A rota de streams do Nuvio não retornou fontes')
+    }
+    console.log(`\n5) Compatibilidade Nuvio (tipo tv): ${streamResult.streams.length} fontes.`)
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
 
   console.log('\nOK — tudo funcionando.')
 }
