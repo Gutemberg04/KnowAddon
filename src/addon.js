@@ -4,6 +4,7 @@ const { addonBuilder } = require('stremio-addon-sdk')
 
 const config = require('./config')
 const scraper = require('./scraper')
+const resolver = require('./resolver')
 const pkg = require('../package.json')
 
 function isSeriesType(type) {
@@ -20,13 +21,16 @@ const manifest = {
   logo: `${config.PUBLIC_URL}/logo.svg`,
   // "tv" é o tipo que alguns clientes (Nuvio) usam para séries. Declaramos os
   // dois para que o addon nunca seja filtrado na hora de buscar as fontes.
-  types: ['series', 'tv'],
+  // "movie" serve para filmes do site abertos a partir de catálogos externos.
+  types: ['series', 'tv', 'movie'],
   resources: [
     { name: 'catalog', types: ['series', 'tv'] },
-    { name: 'meta', types: ['series', 'tv'] },
-    { name: 'stream', types: ['series', 'tv'] }
+    { name: 'meta', types: ['series', 'tv', 'movie'] },
+    { name: 'stream', types: ['series', 'tv', 'movie'] }
   ],
-  idPrefixes: ['ad:'],
+  // Sem `idPrefixes`: assim o cliente consulta o addon também para títulos
+  // abertos em catálogos de terceiros (IDs do IMDb, TMDB, Kitsu, AniList...).
+  // O handler de stream traduz esses IDs para o slug do site.
   catalogs: [
     {
       type: 'series',
@@ -147,22 +151,48 @@ async function streamsForAnimeId(target) {
 }
 
 builder.defineStreamHandler(async ({ type, id }) => {
-  if (!isSeriesType(type)) return { streams: [] }
-
-  const target = parseStreamId(id)
-  if (!target) return { streams: [] }
+  const startedAt = Date.now()
 
   try {
-    if (target.kind === 'episode') {
-      return { streams: await scraper.getStreams(target.videoId) }
+    const target = parseStreamId(id)
+
+    if (target) {
+      const streams =
+        target.kind === 'episode'
+          ? await scraper.getStreams(target.videoId)
+          : await streamsForAnimeId(target)
+
+      logStreams(id, streams, startedAt)
+      return { streams }
     }
 
-    return { streams: await streamsForAnimeId(target) }
+    // Título aberto em outro catálogo (TMDB/IMDb/Kitsu/AniList...): descobre
+    // qual anime do site corresponde e responde com as fontes dele.
+    if (!isSeriesType(type) && type !== 'movie') return { streams: [] }
+
+    const resolved = await resolver.resolveExternal(type, id)
+    if (!resolved) {
+      console.log(`[animesdigital] "${id}" (${type}) não corresponde a nenhum título do site`)
+      return { streams: [] }
+    }
+
+    const streams = await scraper.getStreams(resolved.videoId)
+    logStreams(id, streams, startedAt, resolved)
+    return { streams }
   } catch (error) {
     console.error(`[animesdigital] erro nos streams "${id}":`, error.message)
     return { streams: [] }
   }
 })
+
+function logStreams(id, streams, startedAt, resolved) {
+  const extra = resolved
+    ? ` -> ${resolved.slug} (ep ${resolved.siteEpisode}, nota ${resolved.score})`
+    : ''
+  console.log(
+    `[animesdigital] streams "${id}"${extra}: ${streams.length} em ${Date.now() - startedAt}ms`
+  )
+}
 
 module.exports = builder.getInterface()
 module.exports.manifest = manifest

@@ -471,16 +471,20 @@ async function getStreams(videoId) {
     const { html } = await fetchText(pageUrl)
     const { title, iframes } = parseEpisodePage(html)
 
-    const streams = []
+    const hlsStreams = []
+    const mp4Streams = []
     const fallbacks = []
     const seen = new Set()
 
-    for (const iframe of iframes) {
+    // Os iframes são independentes: resolvemos em paralelo para não somar o
+    // tempo de cada player (era o principal motivo da demora ao abrir a lista).
+    const resolved = await mapLimit(iframes, 4, async (iframe) => {
+      const result = { hls: [], mp4: [], fallback: null }
       let parsedUrl
       try {
         parsedUrl = new URL(iframe)
       } catch {
-        continue
+        return result
       }
 
       // Player 1: HLS direto (api.anivideo.net/videohls.php?d=<m3u8>)
@@ -493,18 +497,17 @@ async function getStreams(videoId) {
           /* mantém o valor original */
         }
 
-        if (hls && /^https?:\/\//i.test(hls) && !seen.has(hls)) {
-          seen.add(hls)
-          streams.push({
+        if (hls && /^https?:\/\//i.test(hls)) {
+          result.hls.push({
             name: 'Animes Digital',
             title: `${title} • Player FHD (HLS)`,
             url: hls,
             behaviorHints: { bingeGroup: 'animesdigital-hls' }
           })
         } else {
-          fallbacks.push(iframe)
+          result.fallback = iframe
         }
-        continue
+        return result
       }
 
       // Player 2: URL base64 embutida (normalmente uma página do Blogger)
@@ -518,26 +521,41 @@ async function getStreams(videoId) {
                 ? `${config.PUBLIC_URL}/proxy?url=${encodeURIComponent(video.url)}`
                 : video.url
 
-              if (seen.has(url)) continue
-              seen.add(url)
-
-              streams.push({
+              result.mp4.push({
                 name: 'Animes Digital',
                 title: `${title} • Player 2 (MP4 ${video.quality})`,
                 url,
                 behaviorHints: { bingeGroup: 'animesdigital-mp4' }
               })
             }
-            if (!videos.length) fallbacks.push(decoded)
+            if (!videos.length) result.fallback = decoded
           } else {
-            fallbacks.push(decoded)
+            result.fallback = decoded
           }
-          continue
+          return result
         }
       }
 
-      fallbacks.push(iframe)
+      result.fallback = iframe
+      return result
+    })
+
+    for (const result of resolved) {
+      for (const stream of result.hls) {
+        if (seen.has(stream.url)) continue
+        seen.add(stream.url)
+        hlsStreams.push(stream)
+      }
+      for (const stream of result.mp4) {
+        if (seen.has(stream.url)) continue
+        seen.add(stream.url)
+        mp4Streams.push(stream)
+      }
+      if (result.fallback) fallbacks.push(result.fallback)
     }
+
+    // HLS primeiro: começa a tocar mais rápido e é o player principal do site.
+    const streams = [...hlsStreams, ...mp4Streams]
 
     // Fallback: abre o player/site no navegador
     if (!streams.length) {

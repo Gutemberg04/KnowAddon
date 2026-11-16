@@ -33,9 +33,21 @@ module.exports = {
   CACHE_TTL: {
     catalog: 5 * 60 * 1000,
     search: 10 * 60 * 1000,
-    meta: 30 * 60 * 1000,
-    stream: 10 * 60 * 1000
+    meta: 60 * 60 * 1000,
+    stream: 20 * 60 * 1000,
+    // Metadados externos usados para achar o título no site
+    imdb: 24 * 60 * 60 * 1000,
+    alias: 24 * 60 * 60 * 1000,
+    // Mapeamento id externo -> slug/episódio do site
+    resolve: 24 * 60 * 60 * 1000
   },
+
+  // Tempo máximo para APIs externas (Cinemeta, Kitsu, AniList, MAL)
+  EXTERNAL_TIMEOUT_MS: 8000,
+
+  // Nota mínima para considerar que um resultado da busca é o título pedido.
+  // Abaixo disso devolvemos "nenhuma fonte" em vez de um episódio errado.
+  MATCH_THRESHOLD: 80,
 
   // Quando true, os MP4 do Blogger são entregues via /proxy (útil quando o
   // addon roda em servidor remoto, pois os links do googlevideo ficam presos

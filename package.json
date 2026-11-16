@@ -1,6 +1,6 @@
 {
   "name": "stremio-animes-digital",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Addon não oficial do Stremio para o site Animes Digital (animesdigital.org)",
   "main": "src/server.js",

@@ -58,6 +58,20 @@ async function main() {
       throw new Error('A rota de streams do Nuvio não retornou fontes')
     }
     console.log(`\n5) Compatibilidade Nuvio (tipo tv): ${streamResult.streams.length} fontes.`)
+
+    // Título aberto em catálogo de terceiros (ID do IMDb + temporada/episódio)
+    const externalId = 'tt12343534:1:5'
+    const externalResponse = await fetch(
+      `${baseUrl}/stream/series/${encodeURIComponent(externalId)}.json`
+    )
+    const externalResult = await externalResponse.json()
+    if (!externalResponse.ok || !externalResult.streams.length) {
+      throw new Error(`ID externo ${externalId} não retornou fontes`)
+    }
+    console.log(
+      `\n6) Fontes por ID externo (${externalId}): ${externalResult.streams.length} fontes.`
+    )
+    console.log(`   ${externalResult.streams[0].title}`)
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }

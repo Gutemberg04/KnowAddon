@@ -20,6 +20,9 @@ Desenvolvido com o [Stremio Addon SDK](https://github.com/Stremio/stremio-addon-
   - **Player 2 (MP4)** — resolução automática dos vídeos do Blogger
     (720p/360p).
   - Fallback para abrir o player no navegador quando nada é resolvido.
+- **Fontes em títulos de outros catálogos** — ao abrir um anime/série/filme em
+  catálogos de terceiros (TMDB, IMDb, listas de outros addons), o addon
+  identifica o título e mostra as fontes do Animes Digital também ali.
 - **Cache em memória** para reduzir requisições ao site e acelerar a navegação.
 
 > O addon apenas lê páginas públicas do site. Não hospeda, armazena nem
@@ -272,9 +275,10 @@ Stremio
   ├─ /catalog/series/latest.json ─────► /ultimos-titulos-adicionados/page/N/
   ├─ /catalog/series/search/...  ─────► /pesquisa/<termo>/page/N/
   ├─ /meta/series/ad:anime:<slug>.json ► /anime/a/<slug> (+ /page/N/)
-  └─ /stream/series/ad:ep:<id>.json ──► /video/a/<id>/
-                                           ├─ iframe api.anivideo.net?d=<m3u8> → stream HLS
-                                           └─ iframe animesdigital.org/<base64> → Blogger → MP4
+  ├─ /stream/series/ad:ep:<id>.json ──► /video/a/<id>/
+  │                                        ├─ iframe api.anivideo.net?d=<m3u8> → stream HLS
+  │                                        └─ iframe animesdigital.org/<base64> → Blogger → MP4
+  └─ /stream/*/tt1234567:1:5.json ────► resolvedor de IDs externos (veja abaixo)
 ```
 
 ### Identificadores
@@ -282,13 +286,47 @@ Stremio
 - Anime: `ad:anime:<slug>` (ex.: `ad:anime:black-clover-2-2`)
 - Episódio: `ad:ep:<id-do-video>` (ex.: `ad:ep:139630`)
 
-O prefixo `ad:` está declarado em `idPrefixes` no manifest.
+O manifest **não declara `idPrefixes`**, então o cliente consulta o addon também
+para títulos abertos em catálogos de terceiros.
+
+### Fontes em títulos de outros catálogos
+
+Quando o cliente abre um título que não veio do catálogo do addon, o ID costuma
+ser do IMDb (`tt2560140`) ou de um banco de animes (`kitsu:7442`,
+`anilist:16498`, `mal:16498`), sempre com a temporada/episódio no fim quando é
+série (`tt2560140:3:4`). O `src/resolver.js` traduz esse ID para o site:
+
+1. **Descobre o nome** — via [Cinemeta](https://v3-cinemeta.strem.io) para IDs
+   do IMDb e via Kitsu/AniList/MAL para IDs de anime.
+2. **Procura no site** — usa `/pesquisa/<termo>/` e compara os títulos
+   ignorando acentos, "Dublado/Legendado", números romanos e marcadores de
+   temporada.
+3. **Traduz o título quando necessário** — o site usa nomes romanizados
+   (`Shingeki no Kyojin`), então o Kitsu é usado para converter
+   "Attack on Titan" → "Shingeki no Kyojin".
+4. **Escolhe o episódio** — considera a temporada pedida (prefere a ficha
+   "… 2", "… 3", "Final Season") e a numeração absoluta em séries com
+   episódios contínuos.
+
+O mapeamento fica em cache por 24 horas. Para conferir um caso específico:
+
+```
+https://SEU-DOMINIO/debug/resolve/series/tt2560140:2:7
+```
+
+Resposta de exemplo: `{"slug":"shingeki-no-kyojin-2","siteEpisode":7,...}`.
+
+> O casamento é por nome: títulos que o site não possui (ou possui com outro
+> nome/idioma) simplesmente não retornam fontes — nunca devolvemos um episódio
+> aleatório. Se o resultado não aparecer, abra o anime pelo catálogo do próprio
+> addon.
 
 ### Estrutura de arquivos
 
 ```
 src/
   addon.js    # manifest + handlers (catálogo, meta, stream)
+  resolver.js # traduz IDs externos (IMDb/Kitsu/AniList/MAL) para o site
   server.js   # Express, landing page, proxy e rotas do SDK
   scraper.js  # parsing do site e resolução de players
   cache.js    # cache em memória com TTL
@@ -314,9 +352,12 @@ public/logo.svg
 
 ### Nuvio: addon instala, mas não mostra fontes
 
-1. **Abra o anime pelo catálogo do addon** (“Últimos Animes” ou a busca do
-   addon). O addon só responde aos IDs `ad:…`; títulos abertos pelos catálogos
-   padrão do Nuvio (TMDB/IMDb) usam outro ID e não encontram fontes.
+1. **Títulos de outros catálogos** também devem mostrar fontes agora: o addon
+   traduz IDs do IMDb (`tt…`) e de animes (`kitsu:`, `anilist:`, `mal:`) para o
+   site. Se um título específico não aparecer, confira o mapeamento em
+   `https://SEU-DOMINIO/debug/resolve/series/tt1234567:1:1` (troque o ID e a
+   temporada/episódio). Sem resultado ali = o site não tem (ou tem com outro
+   nome) esse título.
 2. **Confira o servidor pelo próprio celular**, na mesma rede do Nuvio:
    `https://SEU-DOMINIO/debug/stream/139556` (troque o número por um episódio
    seu). Se aparecer `"count": 3`, o addon está entregando as fontes e o
@@ -331,8 +372,12 @@ public/logo.svg
    requisição de `/stream/...`, o app nem chegou a consultar o addon.
 
 O addon aceita IDs em vários formatos (`ad:ep:123`, `ad:ep:123:1:1`,
-`ad:anime:slug:1:1`) e os tipos `series` e `tv`, justamente para cobrir as
-variações entre clientes.
+`ad:anime:slug:1:1`, `tt123:1:1`) e os tipos `series`, `tv` e `movie`,
+justamente para cobrir as variações entre clientes.
+
+> A primeira consulta de um título externo leva alguns segundos (Cinemeta +
+> busca no site + ficha do anime). Depois disso o mapeamento fica em cache: a
+> lista de fontes volta a abrir rápido.
 
 ---
 

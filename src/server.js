@@ -10,6 +10,7 @@ const { getRouter } = require('stremio-addon-sdk')
 const config = require('./config')
 const addonInterface = require('./addon')
 const scraper = require('./scraper')
+const resolver = require('./resolver')
 
 const app = express()
 app.disable('x-powered-by')
@@ -162,6 +163,29 @@ app.get('/debug/stream/:videoId', async (req, res) => {
   }
 })
 
+// Diagnóstico do mapeamento de IDs externos (TMDB/IMDb/Kitsu/AniList):
+// mostra em qual anime do site o título foi encontrado.
+// Ex.: /debug/resolve/series/tt2560140:1:5
+app.get('/debug/resolve/:type/:id', async (req, res) => {
+  const startedAt = Date.now()
+  const type = String(req.params.type || '').trim()
+  const id = String(req.params.id || '').trim()
+
+  try {
+    const resolved = await resolver.resolveExternal(type, id)
+    res.setHeader('cache-control', 'no-store')
+    res.json({
+      ok: Boolean(resolved),
+      type,
+      id,
+      elapsedMs: Date.now() - startedAt,
+      resolved
+    })
+  } catch (error) {
+    res.status(500).json({ ok: false, type, id, error: error.message })
+  }
+})
+
 // ---------------------------------------------------------------------------
 // Landing page com botão de instalação
 // ---------------------------------------------------------------------------
@@ -285,6 +309,7 @@ app.get('/', (req, res) => {
       <ul>
         <li>Catálogo com os últimos animes adicionados</li>
         <li>Busca integrada na aba Explorar do Stremio</li>
+        <li>Fontes também em títulos abertos por catálogos de terceiros (TMDB/IMDb)</li>
         <li>Episódios em HLS (Player FHD) e MP4 (Player 2)</li>
       </ul>
 
