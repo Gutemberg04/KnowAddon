@@ -98,6 +98,11 @@ function cleanAnimeName(raw) {
     .trim()
 }
 
+/** Junta palavras repetidas seguidas ("... Dublado Dublado Episódio ..."). */
+function collapseRepeatedWords(value) {
+  return cleanText(value).replace(/\b([\p{L}\p{N}]+)(\s+\1\b)+/giu, '$1')
+}
+
 function animeSlugFromUrl(url) {
   const match = String(url || '').match(/\/anime\/a\/([^/?#]+)/i)
   return match ? decodeURIComponent(match[1]) : null
@@ -451,7 +456,9 @@ async function resolveBlogger(pageUrl) {
 function parseEpisodePage(html) {
   const $ = cheerio.load(html)
   const title =
-    cleanText($('#anime_title').first().text()) || cleanText($('h1').first().text()) || 'Episódio'
+    collapseRepeatedWords($('#anime_title').first().text()) ||
+    collapseRepeatedWords($('h1').first().text()) ||
+    'Episódio'
 
   const iframes = new Set()
   $('#player iframe, iframe.metaframe').each((_, element) => {
@@ -591,5 +598,6 @@ module.exports = {
   parseAnimeEpisodes,
   parseEpisodePage,
   decodeEmbedUrl,
-  cleanAnimeName
+  cleanAnimeName,
+  collapseRepeatedWords
 }
