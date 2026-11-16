@@ -1,4 +1,4 @@
-# Animes Digital — Addon para Stremio
+# OmakisAddon — Addon para Stremio
 
 Addon **não oficial** para o [Stremio](https://www.stremio.com/) que usa o
 [animesdigital.org](https://animesdigital.org) como fonte de catálogo e players.
@@ -22,7 +22,7 @@ Desenvolvido com o [Stremio Addon SDK](https://github.com/Stremio/stremio-addon-
   - Fallback para abrir o player no navegador quando nada é resolvido.
 - **Fontes em títulos de outros catálogos** — ao abrir um anime/série/filme em
   catálogos de terceiros (TMDB, IMDb, listas de outros addons), o addon
-  identifica o título e mostra as fontes do Animes Digital também ali.
+  identifica o título e mostra as fontes do site Animes Digital também ali.
 - **Cache em memória** para reduzir requisições ao site e acelerar a navegação.
 
 > O addon apenas lê páginas públicas do site. Não hospeda, armazena nem
@@ -133,7 +133,7 @@ executar o app Express como função serverless.
    ```bash
    git init
    git add .
-   git commit -m "Addon Animes Digital para Stremio"
+   git commit -m "OmakisAddon para Stremio"
    git branch -M main
    git remote add origin https://github.com/SEU-USUARIO/SEU-REPO.git
    git push -u origin main
@@ -256,10 +256,10 @@ o IP do servidor. Os streams HLS (`m3u8`) continuam diretos.
 ### Docker
 
 ```bash
-docker build -t animes-digital-addon .
+docker build -t omakis-addon .
 docker run --rm -p 7000:7000 \
   -e PUBLIC_URL=http://127.0.0.1:7000 \
-  animes-digital-addon
+  omakis-addon
 ```
 
 Em produção, troque `PUBLIC_URL` pelo domínio HTTPS e adicione

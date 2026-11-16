@@ -506,7 +506,7 @@ async function getStreams(videoId) {
 
         if (hls && /^https?:\/\//i.test(hls)) {
           result.hls.push({
-            name: 'Animes Digital',
+            name: 'OmakisAddon',
             title: `${title} • Player FHD (HLS)`,
             url: hls,
             behaviorHints: { bingeGroup: 'animesdigital-hls' }
@@ -529,7 +529,7 @@ async function getStreams(videoId) {
                 : video.url
 
               result.mp4.push({
-                name: 'Animes Digital',
+                name: 'OmakisAddon',
                 title: `${title} • Player 2 (MP4 ${video.quality})`,
                 url,
                 behaviorHints: { bingeGroup: 'animesdigital-mp4' }
@@ -568,7 +568,7 @@ async function getStreams(videoId) {
     if (!streams.length) {
       for (const url of fallbacks.slice(0, 3)) {
         streams.push({
-          name: 'Animes Digital',
+          name: 'OmakisAddon',
           title: `${title} • Abrir player externo`,
           externalUrl: url
         })
@@ -577,7 +577,7 @@ async function getStreams(videoId) {
 
     if (!streams.length) {
       streams.push({
-        name: 'Animes Digital',
+        name: 'OmakisAddon',
         title: `${title} • Abrir episódio no site`,
         externalUrl: pageUrl
       })

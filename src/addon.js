@@ -14,10 +14,11 @@ function isSeriesType(type) {
 const manifest = {
   id: 'org.animesdigital.stremio',
   version: pkg.version,
-  name: 'Animes Digital',
+  name: 'OmakisAddon',
   description:
-    'Assista aos animes, doramas e filmes do Animes Digital (animesdigital.org) direto no Stremio. ' +
-    'Catálogo com os últimos títulos, busca e players em HLS/MP4. Addon não oficial, sem vínculo com o site.',
+    'OmakisAddon — assista aos animes, doramas e filmes do site Animes Digital (animesdigital.org) ' +
+    'direto no Stremio. Catálogo com os últimos títulos, busca e players em HLS/MP4. ' +
+    'Addon não oficial, sem vínculo com o site.',
   logo: `${config.PUBLIC_URL}/logo.svg`,
   // "tv" é o tipo que alguns clientes (Nuvio) usam para séries. Declaramos os
   // dois para que o addon nunca seja filtrado na hora de buscar as fontes.

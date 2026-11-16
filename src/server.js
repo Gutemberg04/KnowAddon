@@ -386,7 +386,7 @@ app.use(getRouter(addonInterface))
 if (require.main === module) {
   app.listen(config.PORT, () => {
     console.log('')
-    console.log('  Animes Digital — addon para Stremio')
+    console.log('  OmakisAddon — addon para Stremio')
     console.log(`  Landing page: ${config.PUBLIC_URL}`)
     console.log(`  Manifest:     ${config.PUBLIC_URL}/manifest.json`)
     console.log(`  Instalar:     stremio://${config.PUBLIC_URL.replace(/^https?:\/\//, '')}/manifest.json`)

@@ -1,7 +1,8 @@
 'use strict'
 
 /**
- * Resolvedor de IDs "de fora" para o catálogo do Animes Digital.
+ * Resolvedor de IDs "de fora" para o catálogo do OmakisAddon (site Animes
+ * Digital).
  *
  * O addon só publica catálogo com IDs próprios (`ad:anime:<slug>`), mas o
  * Nuvio/Stremio consulta o addon também para títulos abertos em catálogos de
