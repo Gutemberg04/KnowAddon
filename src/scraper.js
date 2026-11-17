@@ -619,7 +619,9 @@ async function buildStreams(videoId, trace) {
         result.decoded = decoded
         if (decoded) {
           if (/blogspot\.com|blogger\.com/i.test(decoded)) {
-            const videos = await resolveBlogger(decoded)
+            const steps = []
+            const videos = await resolveBlogger(decoded, steps)
+            if (Array.isArray(trace)) trace.push(...steps)
             for (const video of videos) {
               const url = config.PROXY_STREAMS
                 ? `${config.PUBLIC_URL}/proxy?url=${encodeURIComponent(video.url)}`
