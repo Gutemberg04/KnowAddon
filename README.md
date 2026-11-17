@@ -333,6 +333,7 @@ src/
   resolver.js # traduz IDs externos (IMDb/Kitsu/AniList/MAL) para o site
   server.js   # Express, landing page, proxy e rotas do SDK
   scraper.js  # parsing do site e resolução de players
+  hls.js      # descobre a resolução real dos players HLS
   cache.js    # cache em memória com TTL
   config.js   # configuração central
 test/smoke.js # teste de fumaça
@@ -365,7 +366,9 @@ public/logo.svg
 2. **Confira o servidor pelo próprio celular**, na mesma rede do Nuvio:
    `https://SEU-DOMINIO/debug/stream/139556` (troque o número por um episódio
    seu). Se aparecer `"count": 3`, o addon está entregando as fontes e o
-   problema está no app.
+   problema está no app. Use `/debug/stream/139556?refresh=1` para ignorar o
+   cache e `?trace=1` para ver o passo a passo (inclusive falhas do Blogger,
+   como `HTTP 429`).
 3. **Compare com o Stremio** usando a mesma URL. Se funcionar no Stremio, é
    problema do Nuvio — versões **beta 0.6.x** têm um bug conhecido em que
    nenhum addon retorna streams (`NuvioMedia/NuvioMobile#2442`). Teste a
