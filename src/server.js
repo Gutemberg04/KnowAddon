@@ -147,6 +147,19 @@ app.get('/debug/stream/:videoId', async (req, res) => {
   if (req.query.refresh) cache.remove(`stream:${videoId}`)
 
   try {
+    if (req.query.trace) {
+      const { streams, trace } = await scraper.debugStream(videoId)
+      res.setHeader('cache-control', 'no-store')
+      return res.json({
+        ok: true,
+        videoId,
+        elapsedMs: Date.now() - startedAt,
+        count: streams.length,
+        streams,
+        trace
+      })
+    }
+
     const streams = await scraper.getStreams(videoId)
     res.setHeader('cache-control', 'no-store')
     res.json({

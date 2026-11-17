@@ -527,10 +527,25 @@ async function hlsInfo(url) {
 async function getStreams(videoId) {
   if (!videoId) return []
 
-  return cache.wrap(`stream:${videoId}`, config.CACHE_TTL.stream, async () => {
+  return cache.wrap(`stream:${videoId}`, config.CACHE_TTL.stream, () =>
+    buildStreams(videoId)
+  )
+}
+
+/**
+ * Monta as fontes de um episódio. `trace` (opcional) coleta o passo a passo
+ * usado pelo diagnóstico e desliga o cache.
+ */
+async function buildStreams(videoId, trace) {
+  const note = (step, data) => {
+    if (Array.isArray(trace)) trace.push({ step, ...data })
+  }
+
+  {
     const pageUrl = `${BASE}/video/a/${encodeURIComponent(videoId)}/`
     const { html } = await fetchText(pageUrl)
     const { title, iframes } = parseEpisodePage(html)
+    note('episode', { videoId, title, iframes })
 
     const hlsStreams = []
     const mp4Streams = []
@@ -540,7 +555,7 @@ async function getStreams(videoId) {
     // Os iframes são independentes: resolvemos em paralelo para não somar o
     // tempo de cada player (era o principal motivo da demora ao abrir a lista).
     const resolved = await mapLimit(iframes, 4, async (iframe) => {
-      const result = { hls: [], mp4: [], fallback: null }
+      const result = { hls: [], mp4: [], fallback: null, decoded: null, error: null }
       let parsedUrl
       try {
         parsedUrl = new URL(iframe)
@@ -548,6 +563,7 @@ async function getStreams(videoId) {
         return result
       }
 
+      try {
       // Player 1: HLS direto (api.anivideo.net/videohls.php?d=<m3u8>)
       if (parsedUrl.hostname.endsWith('anivideo.net') && /videohls/i.test(parsedUrl.pathname)) {
         const direct = parsedUrl.searchParams.get('d')
@@ -600,6 +616,7 @@ async function getStreams(videoId) {
       // Player 2: URL base64 embutida (normalmente uma página do Blogger)
       if (parsedUrl.hostname.endsWith('animesdigital.org')) {
         const decoded = decodeEmbedUrl(parsedUrl.pathname)
+        result.decoded = decoded
         if (decoded) {
           if (/blogspot\.com|blogger\.com/i.test(decoded)) {
             const videos = await resolveBlogger(decoded)
@@ -626,8 +643,23 @@ async function getStreams(videoId) {
         }
       }
 
-      result.fallback = iframe
-      return result
+        result.fallback = iframe
+        return result
+      } catch (error) {
+        result.error = error.message
+        if (!result.fallback) result.fallback = iframe
+        return result
+      } finally {
+        note('iframe', {
+          iframe,
+          host: parsedUrl.hostname,
+          decoded: result.decoded,
+          hls: result.hls.length,
+          mp4: result.mp4.length,
+          fallback: result.fallback,
+          error: result.error
+        })
+      }
     })
 
     for (const result of resolved) {
@@ -677,7 +709,17 @@ async function getStreams(videoId) {
     }
 
     return streams
-  })
+  }
+}
+
+/**
+ * Diagnóstico das fontes: percorre o mesmo caminho de `getStreams`, mas sem
+ * cache e devolvendo o passo a passo de cada iframe.
+ */
+async function debugStream(videoId) {
+  const trace = []
+  const streams = await buildStreams(videoId, trace)
+  return { streams, trace }
 }
 
 /**
@@ -720,6 +762,7 @@ module.exports = {
   getMeta,
   getStreams,
   debugBlogger,
+  debugStream,
   // exportados para testes
   parseAnimeCards,
   parseAnimeInfo,
