@@ -166,6 +166,20 @@ app.get('/debug/stream/:videoId', async (req, res) => {
   }
 })
 
+// Diagnóstico do player MP4 (Blogger). Ex.: /debug/blogger/23722z002
+app.get('/debug/blogger/:videoId', async (req, res) => {
+  const startedAt = Date.now()
+  const videoId = String(req.params.videoId || '').trim()
+
+  try {
+    const result = await scraper.debugBlogger(videoId)
+    res.setHeader('cache-control', 'no-store')
+    res.json({ ok: true, elapsedMs: Date.now() - startedAt, ...result })
+  } catch (error) {
+    res.status(500).json({ ok: false, videoId, error: error.message })
+  }
+})
+
 // Diagnóstico do mapeamento de IDs externos (TMDB/IMDb/Kitsu/AniList):
 // mostra em qual anime do site o título foi encontrado.
 // Ex.: /debug/resolve/series/tt2560140:1:5

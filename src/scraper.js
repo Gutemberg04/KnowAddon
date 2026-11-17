@@ -393,15 +393,29 @@ async function getMeta(slug) {
 // Players / streams
 // ---------------------------------------------------------------------------
 
-async function resolveBlogger(pageUrl) {
+async function resolveBlogger(pageUrl, trace) {
+  const note = (step, data) => {
+    if (Array.isArray(trace)) trace.push({ step, ...data })
+  }
+
   try {
     const page = await fetchText(pageUrl, { headers: { referer: BASE + '/' } })
     const tokenMatch = page.html.match(/https:\/\/www\.blogger\.com\/video\.g\?token=[^"'\s<>]+/i)
+    note('blogPage', {
+      url: pageUrl,
+      status: page.status,
+      bytes: page.html.length,
+      tokenFound: Boolean(tokenMatch)
+    })
     if (!tokenMatch) return []
 
     const tokenUrl = tokenMatch[0].replace(/&amp;/g, '&')
     const videoPage = await fetchText(tokenUrl, {
       headers: { referer: pageUrl, accept: 'text/html,*/*' }
+    })
+    note('tokenPage', {
+      status: videoPage.status,
+      bytes: videoPage.html.length
     })
 
     const unescaped = videoPage.html
@@ -417,6 +431,16 @@ async function resolveBlogger(pageUrl) {
       const url = match[0].replace(/[\\),;]+$/, '')
       if (url.includes('googlevideo.com/videoplayback')) candidates.add(url)
     }
+    note('candidates', {
+      count: candidates.size,
+      itags: [...candidates].map((url) => {
+        try {
+          return new URL(url).searchParams.get('itag')
+        } catch {
+          return null
+        }
+      })
+    })
 
     const qualities = { 22: '720p', 18: '360p', 59: '480p', 17: '144p' }
     const heights = { 22: 720, 59: 480, 18: 360, 17: 144 }
@@ -463,6 +487,7 @@ async function resolveBlogger(pageUrl) {
 
     return unique.slice(0, 3)
   } catch (error) {
+    note('error', { message: error.message })
     console.warn(`[animesdigital] não foi possível resolver o player do Blogger: ${error.message}`)
     return []
   }
@@ -655,11 +680,46 @@ async function getStreams(videoId) {
   })
 }
 
+/**
+ * Diagnóstico do player MP4 (Blogger): mostra cada etapa da resolução.
+ * Usado por /debug/blogger/<videoId> para investigar episódios sem fontes.
+ */
+async function debugBlogger(videoId) {
+  const pageUrl = `${BASE}/video/a/${encodeURIComponent(videoId)}/`
+  const { html, status } = await fetchText(pageUrl)
+  const { title, iframes } = parseEpisodePage(html)
+
+  const trace = []
+  const results = []
+
+  for (const iframe of iframes) {
+    let parsedUrl
+    try {
+      parsedUrl = new URL(iframe)
+    } catch {
+      continue
+    }
+    if (!parsedUrl.hostname.endsWith('animesdigital.org')) continue
+
+    const decoded = decodeEmbedUrl(parsedUrl.pathname)
+    trace.push({ step: 'decode', iframe, decoded })
+    if (!decoded || !/blogspot\.com|blogger\.com/i.test(decoded)) continue
+
+    const steps = []
+    const videos = await resolveBlogger(decoded, steps)
+    trace.push(...steps)
+    results.push({ decoded, videos })
+  }
+
+  return { videoId, title, episodeStatus: status, iframes, trace, results }
+}
+
 module.exports = {
   getLatest,
   search,
   getMeta,
   getStreams,
+  debugBlogger,
   // exportados para testes
   parseAnimeCards,
   parseAnimeInfo,
