@@ -33,6 +33,8 @@ const HTML_HEADERS = {
 // HTTP
 // ---------------------------------------------------------------------------
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
 async function fetchText(url, options = {}) {
   const { timeout = config.REQUEST_TIMEOUT_MS, headers = {}, retries = 1 } = options
   let lastError
@@ -48,6 +50,20 @@ async function fetchText(url, options = {}) {
       if (!response.ok) {
         const error = new Error(`HTTP ${response.status} ao acessar ${url}`)
         error.status = response.status
+
+        // 429 = limite de requisições (comum no Blogger para IPs de
+        // datacenter, como os da Vercel). Espera um pouco e tenta de novo.
+        if (response.status === 429 && attempt < retries) {
+          const retryAfter = Number(response.headers.get('retry-after'))
+          const waitMs =
+            Number.isFinite(retryAfter) && retryAfter > 0
+              ? Math.min(retryAfter * 1000, 3000)
+              : 400 * (attempt + 1)
+          await sleep(waitMs)
+          lastError = error
+          continue
+        }
+
         // 4xx não melhora com retry
         if (response.status >= 400 && response.status < 500) throw error
         lastError = error
@@ -399,7 +415,10 @@ async function resolveBlogger(pageUrl, trace) {
   }
 
   try {
-    const page = await fetchText(pageUrl, { headers: { referer: BASE + '/' } })
+    const page = await fetchText(pageUrl, {
+      headers: { referer: BASE + '/' },
+      retries: 2
+    })
     const tokenMatch = page.html.match(/https:\/\/www\.blogger\.com\/video\.g\?token=[^"'\s<>]+/i)
     note('blogPage', {
       url: pageUrl,
@@ -411,7 +430,8 @@ async function resolveBlogger(pageUrl, trace) {
 
     const tokenUrl = tokenMatch[0].replace(/&amp;/g, '&')
     const videoPage = await fetchText(tokenUrl, {
-      headers: { referer: pageUrl, accept: 'text/html,*/*' }
+      headers: { referer: pageUrl, accept: 'text/html,*/*' },
+      retries: 2
     })
     note('tokenPage', {
       status: videoPage.status,
