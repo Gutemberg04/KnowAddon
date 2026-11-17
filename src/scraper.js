@@ -17,6 +17,7 @@
 const cheerio = require('cheerio')
 const config = require('./config')
 const cache = require('./cache')
+const hls = require('./hls')
 
 const BASE = config.SITE_URL
 
@@ -418,6 +419,7 @@ async function resolveBlogger(pageUrl) {
     }
 
     const qualities = { 22: '720p', 18: '360p', 59: '480p', 17: '144p' }
+    const heights = { 22: 720, 59: 480, 18: 360, 17: 144 }
     const byItag = new Map()
 
     for (const url of candidates) {
@@ -425,6 +427,7 @@ async function resolveBlogger(pageUrl) {
         const parsedUrl = new URL(url)
         const itag = parsedUrl.searchParams.get('itag') || ''
         const mime = parsedUrl.searchParams.get('mime') || ''
+        if (!qualities[itag]) continue
         if (mime && !mime.startsWith('video/mp4')) continue
 
         // A página do Blogger repete a mesma qualidade em URLs ligeiramente
@@ -435,6 +438,7 @@ async function resolveBlogger(pageUrl) {
         byItag.set(key, {
           url,
           itag,
+          height: heights[itag] || 0,
           quality: qualities[itag] || (itag ? `itag ${itag}` : 'MP4')
         })
       } catch {
@@ -442,11 +446,21 @@ async function resolveBlogger(pageUrl) {
       }
     }
 
-    const order = { 22: 0, 18: 1, 59: 2, 17: 3 }
+    const order = { 22: 0, 59: 1, 18: 2, 17: 3 }
     const parsed = [...byItag.values()]
     parsed.sort((a, b) => (order[a.itag] ?? 99) - (order[b.itag] ?? 99))
 
-    return parsed.slice(0, 2)
+    // Uma fonte por resolução (o Blogger repete a mesma qualidade em itags
+    // diferentes em alguns vídeos).
+    const unique = []
+    const seenHeights = new Set()
+    for (const video of parsed) {
+      if (seenHeights.has(video.height)) continue
+      seenHeights.add(video.height)
+      unique.push(video)
+    }
+
+    return unique.slice(0, 3)
   } catch (error) {
     console.warn(`[animesdigital] não foi possível resolver o player do Blogger: ${error.message}`)
     return []
@@ -468,6 +482,20 @@ function parseEpisodePage(html) {
   })
 
   return { title, iframes: [...iframes] }
+}
+
+const HLS_INFO_TTL = 24 * 60 * 60 * 1000
+
+/** Resolução real do HLS. Guardamos por 24h porque o arquivo não muda. */
+async function hlsInfo(url) {
+  try {
+    return await cache.wrap(`hls:${url}`, HLS_INFO_TTL, () => hls.probeHls(url))
+  } catch (error) {
+    console.warn(
+      `[animesdigital] não foi possível medir a qualidade do HLS: ${error.message}`
+    )
+    return null
+  }
 }
 
 async function getStreams(videoId) {
@@ -505,12 +533,38 @@ async function getStreams(videoId) {
         }
 
         if (hls && /^https?:\/\//i.test(hls)) {
-          result.hls.push({
-            name: 'OmakisAddon',
-            title: `${title} • Player FHD (HLS)`,
-            url: hls,
-            behaviorHints: { bingeGroup: 'animesdigital-hls' }
-          })
+          const info = await hlsInfo(hls)
+
+          if (info && info.variants && info.variants.length) {
+            const seenHeights = new Set()
+
+            // Master playlist: cada variante vira uma fonte com a qualidade
+            // real, para o usuário escolher 1080p/720p/480p de verdade.
+            for (const variant of info.variants) {
+              if (!variant.height || seenHeights.has(variant.height)) continue
+              seenHeights.add(variant.height)
+
+              result.hls.push({
+                name: 'OmakisAddon',
+                title: `${title} • Player 1 (HLS ${variant.height}p)`,
+                url: variant.url,
+                __height: variant.height,
+                behaviorHints: { bingeGroup: `animesdigital-hls-${variant.height}` }
+              })
+            }
+          }
+
+          if (!result.hls.length) {
+            const height = info && info.height ? info.height : 0
+
+            result.hls.push({
+              name: 'OmakisAddon',
+              title: `${title} • Player 1 (HLS${height ? ` ${height}p` : ''})`,
+              url: hls,
+              __height: height,
+              behaviorHints: { bingeGroup: 'animesdigital-hls' }
+            })
+          }
         } else {
           result.fallback = iframe
         }
@@ -532,7 +586,10 @@ async function getStreams(videoId) {
                 name: 'OmakisAddon',
                 title: `${title} • Player 2 (MP4 ${video.quality})`,
                 url,
-                behaviorHints: { bingeGroup: 'animesdigital-mp4' }
+                __height: video.height || 0,
+                behaviorHints: {
+                  bingeGroup: `animesdigital-mp4-${video.height || 'x'}`
+                }
               })
             }
             if (!videos.length) result.fallback = decoded
@@ -561,8 +618,18 @@ async function getStreams(videoId) {
       if (result.fallback) fallbacks.push(result.fallback)
     }
 
-    // HLS primeiro: começa a tocar mais rápido e é o player principal do site.
+    // Ordena da maior para a menor qualidade; em empate, HLS primeiro
+    // (começa a tocar mais rápido e é o player principal do site).
     const streams = [...hlsStreams, ...mp4Streams]
+      .map((stream, index) => ({ stream, index }))
+      .sort(
+        (a, b) =>
+          (b.stream.__height || 0) - (a.stream.__height || 0) || a.index - b.index
+      )
+      .map(({ stream }) => {
+        delete stream.__height
+        return stream
+      })
 
     // Fallback: abre o player/site no navegador
     if (!streams.length) {

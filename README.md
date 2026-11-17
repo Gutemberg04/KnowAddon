@@ -16,9 +16,13 @@ Desenvolvido com o [Stremio Addon SDK](https://github.com/Stremio/stremio-addon-
 - **Ficha completa** — pôster, sinopse, ano, gêneros e lista de episódios
   (inclusive séries longas com centenas de episódios, que o site pagina).
 - **Streams**:
-  - **Player FHD (HLS)** — playlist `.m3u8` direta do CDN usado pelo site.
+  - **Player 1 (HLS)** — playlist `.m3u8` direta do CDN usado pelo site, com a
+    resolução real detectada (ex.: `HLS 720p`, `HLS 1080p`) em vez de um
+    rótulo fixo "FHD".
   - **Player 2 (MP4)** — resolução automática dos vídeos do Blogger
-    (720p/360p).
+    (720p, 480p e 360p).
+  - As fontes são ordenadas da maior para a menor qualidade; em empate, o HLS
+    vem primeiro por começar a tocar mais rápido.
   - Fallback para abrir o player no navegador quando nada é resolvido.
 - **Fontes em títulos de outros catálogos** — ao abrir um anime/série/filme em
   catálogos de terceiros (TMDB, IMDb, listas de outros addons), o addon
