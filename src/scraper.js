@@ -427,7 +427,6 @@ async function resolveBlogger(pageUrl) {
         const parsedUrl = new URL(url)
         const itag = parsedUrl.searchParams.get('itag') || ''
         const mime = parsedUrl.searchParams.get('mime') || ''
-        if (!qualities[itag]) continue
         if (mime && !mime.startsWith('video/mp4')) continue
 
         // A página do Blogger repete a mesma qualidade em URLs ligeiramente
@@ -439,7 +438,7 @@ async function resolveBlogger(pageUrl) {
           url,
           itag,
           height: heights[itag] || 0,
-          quality: qualities[itag] || (itag ? `itag ${itag}` : 'MP4')
+          quality: qualities[itag] || (itag ? `itag ${itag}` : '')
         })
       } catch {
         /* ignora URLs inválidas */
@@ -451,14 +450,16 @@ async function resolveBlogger(pageUrl) {
     parsed.sort((a, b) => (order[a.itag] ?? 99) - (order[b.itag] ?? 99))
 
     // Uma fonte por resolução (o Blogger repete a mesma qualidade em itags
-    // diferentes em alguns vídeos).
+    // diferentes em alguns vídeos). Só usa URLs sem itag quando não houver
+    // nenhuma com resolução conhecida.
     const unique = []
     const seenHeights = new Set()
-    for (const video of parsed) {
+    for (const video of parsed.filter((v) => v.height > 0)) {
       if (seenHeights.has(video.height)) continue
       seenHeights.add(video.height)
       unique.push(video)
     }
+    if (!unique.length && parsed.length) unique.push(parsed[0])
 
     return unique.slice(0, 3)
   } catch (error) {
@@ -584,7 +585,7 @@ async function getStreams(videoId) {
 
               result.mp4.push({
                 name: 'OmakisAddon',
-                title: `${title} • Player 2 (MP4 ${video.quality})`,
+                title: `${title} • Player 2 (MP4${video.quality ? ` ${video.quality}` : ''})`,
                 url,
                 __height: video.height || 0,
                 behaviorHints: {

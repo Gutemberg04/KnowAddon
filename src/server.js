@@ -11,6 +11,7 @@ const config = require('./config')
 const addonInterface = require('./addon')
 const scraper = require('./scraper')
 const resolver = require('./resolver')
+const cache = require('./cache')
 
 const app = express()
 app.disable('x-powered-by')
@@ -138,10 +139,12 @@ app.get('/health', (req, res) => {
 })
 
 // Diagnóstico rápido: resolve as fontes de um episódio e mostra o resultado.
-// Ex.: /debug/stream/139556
+// Ex.: /debug/stream/139556  (use ?refresh=1 para ignorar o cache)
 app.get('/debug/stream/:videoId', async (req, res) => {
   const startedAt = Date.now()
   const videoId = String(req.params.videoId || '').trim()
+
+  if (req.query.refresh) cache.remove(`stream:${videoId}`)
 
   try {
     const streams = await scraper.getStreams(videoId)

@@ -54,4 +54,10 @@ async function wrap(key, ttlMs, producer) {
   return promise
 }
 
-module.exports = { get, set, wrap }
+/** Remove uma entrada (usado pelo diagnóstico com ?refresh=1). */
+function remove(key) {
+  store.delete(key)
+  inflight.delete(key)
+}
+
+module.exports = { get, set, wrap, remove }
